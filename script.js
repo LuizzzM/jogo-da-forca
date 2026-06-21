@@ -1,5 +1,3 @@
-// script.js
-// Lista de palavras por categoria com dica (25 itens por categoria)
 const DADOS = {
   linguagem: [
     { palavra: "javascript", dica: "Linguagem que roda no navegador" },
@@ -111,14 +109,12 @@ const DADOS = {
   ]
 };
 
-// Fatores de dificuldade (facil tem mais tentativas)
 const DIFICULDADE_FATOR = {
   facil: 0.5,
   intermediario: 0.3,
   dificil: 0.2
 };
 
-// Elementos DOM
 const registro = document.getElementById("registro");
 const btnIniciar = document.getElementById("btnIniciar");
 const nomeInput = document.getElementById("nome");
@@ -141,7 +137,6 @@ const ctx = canvas.getContext("2d");
 const tabelaPlacarBody = document.querySelector("#tabelaPlacar tbody");
 const btnLimparPlacar = document.getElementById("btnLimparPlacar");
 
-// Estado do jogo
 let palavraSecreta = "";
 let dicaAtual = "";
 let progresso = [];
@@ -152,7 +147,56 @@ let jogador = "";
 let dificuldade = "facil";
 let categoriaEscolhida = "";
 
-// Placar persistente
+let audioCtx = null;
+function ensureAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } else if (audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+}
+function playTone(freq, type, duration, gain) {
+  ensureAudioContext();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.value = 0;
+  o.connect(g);
+  g.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+  g.gain.cancelScheduledValues(now);
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(gain, now + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, now + duration);
+  o.start(now);
+  o.stop(now + duration + 0.02);
+}
+function playHover() {
+  playTone(880, "sine", 0.06, 0.06);
+}
+function playClick() {
+  playTone(660, "triangle", 0.08, 0.08);
+}
+function playSuccess() {
+  playTone(880, "sine", 0.09, 0.09);
+  setTimeout(()=>playTone(1100, "sine", 0.12, 0.09), 90);
+}
+function playError() {
+  playTone(220, "sawtooth", 0.18, 0.12);
+}
+function playDefeat() {
+  playTone(220, "sawtooth", 0.18, 0.12);
+  setTimeout(()=>playTone(180, "sawtooth", 0.18, 0.12), 180);
+  setTimeout(()=>playTone(140, "sawtooth", 0.22, 0.12), 360);
+}
+function playVictory() {
+  playTone(880, "sine", 0.09, 0.09);
+  setTimeout(()=>playTone(1100, "sine", 0.09, 0.09), 110);
+  setTimeout(()=>playTone(1320, "sine", 0.12, 0.09), 230);
+  setTimeout(()=>playTone(1760, "sine", 0.18, 0.12), 360);
+}
+
 function carregarPlacar() {
   const raw = localStorage.getItem("placar_forca");
   return raw ? JSON.parse(raw) : [];
@@ -174,10 +218,8 @@ btnLimparPlacar.addEventListener("click", ()=>{
   atualizarTabelaPlacar();
 });
 
-// Segurança minima para evitar injecao no DOM
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 
-// Escolhe uma categoria aleatoria e uma palavra dentro dela
 function escolherCategoriaEPalavra(){
   const chaves = Object.keys(DADOS);
   const idxCat = Math.floor(Math.random() * chaves.length);
@@ -187,7 +229,6 @@ function escolherCategoriaEPalavra(){
   return { categoria: cat, palavra: escolha.palavra.toLowerCase(), dica: escolha.dica };
 }
 
-// Gerencia selecao visual dos botoes de dificuldade
 diffButtons.forEach(btn => {
   btn.addEventListener("click", () => {
     diffButtons.forEach(b => {
@@ -198,40 +239,43 @@ diffButtons.forEach(btn => {
     btn.setAttribute("aria-pressed", "true");
     dificuldade = btn.dataset.dificuldade || "facil";
   });
-
-  // Permitir selecao por teclado com Enter/Space
   btn.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       btn.click();
     }
   });
+  btn.addEventListener("mouseenter", ()=>{ playHover(); });
+  btn.addEventListener("click", ()=>{ playClick(); });
 });
 
-// Iniciar jogo
+document.addEventListener("mouseover", (e)=>{
+  const b = e.target.closest("button");
+  if (b && !b.dataset._hovered) {
+    b.dataset._hovered = "1";
+    setTimeout(()=>{ delete b.dataset._hovered; }, 250);
+    playHover();
+  }
+});
+document.addEventListener("click", (e)=>{
+  const b = e.target.closest("button");
+  if (b) playClick();
+});
+
 btnIniciar.addEventListener("click", ()=>{
   const nome = nomeInput.value.trim() || "Anonimo";
   jogador = nome;
-
-  // se nenhuma dificuldade foi selecionada, usar facil por padrao
   const selecionado = document.querySelector(".diff-btn.active");
   dificuldade = selecionado ? selecionado.dataset.dificuldade : "facil";
-
-  // escolher categoria e palavra aleatoriamente
   const escolha = escolherCategoriaEPalavra();
   categoriaEscolhida = escolha.categoria;
   palavraSecreta = escolha.palavra;
   dicaAtual = escolha.dica;
-
-  // calcular tentativas maximas a partir do fator (facil tem mais tentativas)
   const fator = DIFICULDADE_FATOR[dificuldade];
   maxErros = Math.max(1, Math.ceil(palavraSecreta.length * fator));
   tentativasRestantes = maxErros;
   erros = 0;
-
   progresso = Array.from(palavraSecreta).map(ch => (ch === " " ? " " : "_"));
-
-  // atualizar UI
   jogadorNomeSpan.textContent = jogador;
   jogadorDificuldadeSpan.textContent = formatarDificuldadeExibicao(dificuldade);
   jogadorCategoriaSpan.textContent = formatarCategoria(categoriaEscolhida);
@@ -239,22 +283,18 @@ btnIniciar.addEventListener("click", ()=>{
   palavraDiv.textContent = progresso.join(" ");
   dicaDiv.textContent = "Dica: " + dicaAtual;
   mensagemP.textContent = "";
-
   registro.classList.add("hidden");
   jogoSection.classList.remove("hidden");
-
   desenharForcaInicial();
   criarTeclado();
 });
 
-// Reiniciar jogo (voltar ao registro)
 btnReiniciar.addEventListener("click", ()=>{
   registro.classList.remove("hidden");
   jogoSection.classList.add("hidden");
   limparCanvas();
 });
 
-// Criar teclado
 function criarTeclado(){
   tecladoDiv.innerHTML = "";
   for(let i=65;i<=90;i++){
@@ -262,22 +302,24 @@ function criarTeclado(){
     const btn = document.createElement("button");
     btn.textContent = letra;
     btn.addEventListener("click", ()=>verificarLetra(letra, btn));
+    btn.addEventListener("mouseenter", ()=>playHover());
+    btn.addEventListener("click", ()=>playClick());
     tecladoDiv.appendChild(btn);
   }
 }
 
-// Verificar letra
 function verificarLetra(letra, btn){
   if (tentativasRestantes <= 0) return;
   btn.disabled = true;
-
   if (palavraSecreta.includes(letra)){
     for (let i=0;i<palavraSecreta.length;i++){
       if (palavraSecreta[i] === letra) progresso[i] = letra;
     }
     btn.classList.add("correct");
     palavraDiv.textContent = progresso.join(" ");
+    playSuccess();
     if (!progresso.includes("_")){
+      playVictory();
       finalizarJogo(true);
     }
   } else {
@@ -286,113 +328,98 @@ function verificarLetra(letra, btn){
     tentativasRestantes = Math.max(0, maxErros - erros);
     tentativasSpan.textContent = tentativasRestantes;
     desenharProximoErro(erros);
+    playError();
     if (tentativasRestantes === 0){
-      // desenhar boneco completo independentemente do maxErros
       desenharForcaCompleta();
+      playDefeat();
       finalizarJogo(false);
     }
   }
 }
 
-// Finalizar jogo
 function finalizarJogo(venceu){
-  // calcular score simples: base por dificuldade + bonus por tentativas sobrando + comprimento da palavra
   const base = dificuldade === "facil" ? 50 : dificuldade === "intermediario" ? 100 : 200;
   const bonus = tentativasRestantes * 10;
   const comprimento = palavraSecreta.length;
   const score = venceu ? base + bonus + comprimento : Math.max(0, Math.floor((base/4) - (erros*5)));
-
-  // mostrar mensagem com quebra de linha e score em fonte maior
   if (venceu) {
     mensagemP.innerHTML = `🎉 Você venceu!<span class="score">Score: ${score}</span>`;
   } else {
     mensagemP.innerHTML = `💀 Você perdeu! A palavra era "${escapeHtml(palavraSecreta)}".<span class="score">Score: ${score}</span>`;
   }
-
-  // salvar no placar
   const placar = carregarPlacar();
   placar.push({ nome: jogador, score, data: new Date().toISOString() });
   salvarPlacar(placar);
   atualizarTabelaPlacar();
-
-  // desabilitar teclado
   const botoes = tecladoDiv.querySelectorAll("button");
   botoes.forEach(b => b.disabled = true);
 }
 
-// Canvas da forca
 function desenharForcaInicial(){
   limparCanvas();
   ctx.strokeStyle = "#333";
   ctx.lineWidth = 4;
-  // base
   ctx.beginPath();
   ctx.moveTo(20,220);
   ctx.lineTo(200,220);
   ctx.stroke();
-  // poste
   ctx.beginPath();
   ctx.moveTo(60,220);
   ctx.lineTo(60,20);
   ctx.lineTo(140,20);
   ctx.lineTo(140,40);
   ctx.stroke();
-  // nao desenha corpo ainda
 }
 
 function limparCanvas(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 }
 
-// desenha partes progressivamente (mantido para compatibilidade)
 function desenharProximoErro(n){
   ctx.strokeStyle = "#333";
   ctx.lineWidth = 3;
   switch(n){
-    case 1: // cabeca
+    case 1:
       ctx.beginPath();
       ctx.arc(140,60,18,0,Math.PI*2);
       ctx.stroke();
       break;
-    case 2: // tronco
+    case 2:
       ctx.beginPath();
       ctx.moveTo(140,78);
       ctx.lineTo(140,130);
       ctx.stroke();
       break;
-    case 3: // braco esquerdo
+    case 3:
       ctx.beginPath();
       ctx.moveTo(140,90);
       ctx.lineTo(115,110);
       ctx.stroke();
       break;
-    case 4: // braco direito
+    case 4:
       ctx.beginPath();
       ctx.moveTo(140,90);
       ctx.lineTo(165,110);
       ctx.stroke();
       break;
-    case 5: // perna esquerda
+    case 5:
       ctx.beginPath();
       ctx.moveTo(140,130);
       ctx.lineTo(120,170);
       ctx.stroke();
       break;
-    case 6: // perna direita
+    case 6:
       ctx.beginPath();
       ctx.moveTo(140,130);
       ctx.lineTo(160,170);
       ctx.stroke();
       break;
     default:
-      // nada extra aqui
   }
 }
 
-// desenha o boneco completo (usado quando o jogador perde)
 function desenharForcaCompleta(){
   limparCanvas();
-  // desenha estrutura
   ctx.strokeStyle = "#333";
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -405,50 +432,38 @@ function desenharForcaCompleta(){
   ctx.lineTo(140,20);
   ctx.lineTo(140,40);
   ctx.stroke();
-
-  // desenha todas as partes do corpo
   ctx.lineWidth = 3;
-  // cabeca
   ctx.beginPath();
   ctx.arc(140,60,18,0,Math.PI*2);
   ctx.stroke();
-  // tronco
   ctx.beginPath();
   ctx.moveTo(140,78);
   ctx.lineTo(140,130);
   ctx.stroke();
-  // braco esquerdo
   ctx.beginPath();
   ctx.moveTo(140,90);
   ctx.lineTo(115,110);
   ctx.stroke();
-  // braco direito
   ctx.beginPath();
   ctx.moveTo(140,90);
   ctx.lineTo(165,110);
   ctx.stroke();
-  // perna esquerda
   ctx.beginPath();
   ctx.moveTo(140,130);
   ctx.lineTo(120,170);
   ctx.stroke();
-  // perna direita
   ctx.beginPath();
   ctx.moveTo(140,130);
   ctx.lineTo(160,170);
   ctx.stroke();
-
-  // olhos X (opcional para indicar derrota)
   ctx.strokeStyle = "#d9534f";
   ctx.lineWidth = 2;
-  // olho esquerdo
   ctx.beginPath();
   ctx.moveTo(134,54);
   ctx.lineTo(138,58);
   ctx.moveTo(138,54);
   ctx.lineTo(134,58);
   ctx.stroke();
-  // olho direito
   ctx.beginPath();
   ctx.moveTo(142,54);
   ctx.lineTo(146,58);
@@ -457,7 +472,6 @@ function desenharForcaCompleta(){
   ctx.stroke();
 }
 
-// Formata nome da categoria para exibicao
 function formatarCategoria(cat){
   if (cat === "linguagem") return "Linguagem de programacao";
   if (cat === "frutas") return "Frutas";
@@ -466,7 +480,6 @@ function formatarCategoria(cat){
   return cat;
 }
 
-// Formata dificuldade para exibicao com inicial maiuscula e acento
 function formatarDificuldadeExibicao(key){
   if (key === "facil") return "Fácil";
   if (key === "intermediario") return "Intermediário";
@@ -474,5 +487,4 @@ function formatarDificuldadeExibicao(key){
   return key;
 }
 
-// Inicializar placar ao carregar
 atualizarTabelaPlacar();
