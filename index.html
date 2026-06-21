@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Jogo da Forca</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Jogo da Forca</h1>
+    </header>
+
+    <section id="registro" class="card">
+      <h2>Registro do Jogador</h2>
+
+      <label for="nome">Nome</label>
+      <input id="nome" type="text" placeholder="Seu nome" />
+
+      <div class="dificuldade-area">
+        <p class="label-diff">Escolha a dificuldade</p>
+        <div class="dificuldades">
+          <button class="diff-btn" data-dificuldade="facil" aria-pressed="false">Fácil</button>
+          <button class="diff-btn" data-dificuldade="intermediario" aria-pressed="false">Intermediário</button>
+          <button class="diff-btn" data-dificuldade="dificil" aria-pressed="false">Difícil</button>
+        </div>
+      </div>
+
+      <button id="btnIniciar" class="action-btn">Iniciar Jogo</button>
+    </section>
+
+    <section id="jogo" class="card hidden">
+      <div class="top-row">
+        <div>
+          <p><strong>Jogador:</strong> <span id="jogadorNome"></span></p>
+          <p><strong>Dificuldade:</strong> <span id="jogadorDificuldade"></span></p>
+          <p><strong>Categoria:</strong> <span id="jogadorCategoria"></span></p>
+          <p><strong>Tentativas restantes:</strong> <span id="tentativasRestantes"></span></p>
+        </div>
+        <canvas id="forcaCanvas" width="240" height="240" aria-label="Desenho da forca"></canvas>
+      </div>
+
+      <div class="palavra-area">
+        <div id="palavra" class="palavra"></div>
+        <div id="dica" class="dica"></div>
+      </div>
+
+      <div id="teclado" class="teclado"></div>
+
+      <div class="controls">
+        <button id="btnReiniciar" class="action-btn">Voltar ao Registro</button>
+      </div>
+
+      <p id="mensagem" class="mensagem"></p>
+    </section>
+
+    <section id="placar" class="card">
+      <h2>Placar</h2>
+      <table id="tabelaPlacar">
+        <thead>
+          <tr>
+            <th>Posição</th>
+            <th>Nome</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <button id="btnLimparPlacar" class="small action-btn">Limpar Placar</button>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
